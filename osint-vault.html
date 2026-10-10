@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>OSINT Vault</title>
+<style>
+:root{
+  --side:#151c26; --side-2:#1e2733; --side-ink:#d6dee7; --side-muted:#8696a8; --side-line:#2b3745;
+  --bg:#e7ecf0; --paper:#f8fafb; --ink:#17202a; --muted:#586575; --line:#cad4dd; --grid:rgba(120,140,160,.20);
+  --accent:#2a4de0; --accent-ink:#ffffff; --mark:#ffe27a; --danger:#b3261e; --ok:#1d7a46;
+  --serif:"Iowan Old Style","Charter","Palatino Linotype",Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;
+  --mono:ui-monospace,"JetBrains Mono","Cascadia Code","DejaVu Sans Mono",Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#0d1218; --paper:#141b24; --ink:#dde5ed; --muted:#8d9aa9; --line:#28323f; --grid:rgba(130,150,175,.10);
+  --accent:#88a2ff; --accent-ink:#0b122e; --mark:#5f5010; --danger:#ff8f86; --ok:#6fd49b;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:15px/1.5 var(--sans);color:var(--ink);background:var(--bg);overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+[hidden]{display:none!important}
+
+#app{display:grid;grid-template-columns:288px minmax(0,1fr) 272px;height:100vh;height:100dvh}
+#app.no-info{grid-template-columns:288px minmax(0,1fr) 0}
+#app.no-info #info{display:none}
+
+/* sidebar */
+#sidebar{background:var(--side);color:var(--side-ink);display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--side-line)}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 6px;font-weight:650;font-size:16px;letter-spacing:.2px}
+.brand svg{flex:none}
+.actions{display:flex;gap:6px;padding:10px 12px 8px;flex-wrap:wrap}
+.actions .primary{flex:1 1 100%}
+.actions .ghost{flex:1}
+.btn,.primary,.ghost{border:1px solid transparent;border-radius:6px;padding:7px 11px;line-height:1.2}
+.primary{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.primary:hover{filter:brightness(1.08)}
+#sidebar .ghost{background:var(--side-2);color:var(--side-ink);border-color:var(--side-line)}
+#sidebar .ghost:hover{border-color:var(--side-muted)}
+#search{margin:4px 12px 8px;padding:8px 10px;border-radius:6px;border:1px solid var(--side-line);background:#0f151d;color:var(--side-ink)}
+#search::placeholder{color:var(--side-muted)}
+.tags{display:flex;flex-wrap:wrap;gap:5px;padding:0 12px 8px;max-height:84px;overflow:auto}
+.chip{border:1px solid var(--side-line);background:transparent;color:var(--side-muted);border-radius:999px;padding:2px 9px;font-size:12.5px}
+.chip:hover{color:var(--side-ink);border-color:var(--side-muted)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.list{flex:1;overflow:auto;padding:4px 8px 8px;min-height:0}
+.item{display:block;width:100%;text-align:left;background:transparent;border:0;border-left:3px solid transparent;border-radius:4px;padding:8px 9px;color:var(--side-ink)}
+.item:hover{background:var(--side-2)}
+.item[aria-current="true"]{background:var(--side-2);border-left-color:var(--accent)}
+.item b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item small{display:block;color:var(--side-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.item i{font-style:normal;color:var(--side-muted);font-size:11.5px}
+.empty{color:var(--side-muted);padding:14px 10px;font-size:13.5px}
+.side-foot{border-top:1px solid var(--side-line);padding:9px 14px;font-size:12.5px;color:var(--side-muted);display:grid;gap:2px}
+.warn{color:#f0b46a!important}
+.side-foot .warn{color:#f0b46a}
+
+/* main */
+#main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--paper);flex-wrap:wrap}
+#title{flex:1 1 220px;min-width:0;font:600 19px/1.2 var(--serif);border:0;background:transparent;padding:5px 4px;border-bottom:1px dashed transparent}
+#title:hover,#title:focus{border-bottom-color:var(--line);outline:none}
+.toolbar .ghost,.toolbar select{background:transparent;border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+.toolbar .ghost:hover,.toolbar select:hover{border-color:var(--muted)}
+.toolbar .danger{color:var(--danger)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 11px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.only-mobile{display:none}
+
+#work{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr}
+#work.mode-edit{grid-template-columns:1fr}
+#work.mode-edit #previewWrap{display:none}
+#work.mode-read{grid-template-columns:1fr}
+#work.mode-read #editorWrap{display:none}
+#editorWrap{position:relative;min-width:0;min-height:0;background:var(--paper);border-right:1px solid var(--line)}
+#work.mode-edit #editorWrap{border-right:0}
+#ed{width:100%;height:100%;resize:none;border:0;outline:none;background:transparent;padding:22px 26px 60px;font:14px/1.7 var(--mono);tab-size:2;color:var(--ink)}
+#suggest{position:absolute;left:18px;bottom:14px;margin:0;padding:4px;list-style:none;background:var(--side);color:var(--side-ink);border:1px solid var(--side-line);border-radius:8px;min-width:230px;max-width:calc(100% - 36px);box-shadow:0 6px 24px rgba(0,0,0,.28);z-index:5}
+#suggest li{padding:6px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#suggest li[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+#previewWrap{overflow:auto;min-width:0;min-height:0;background-color:var(--bg);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px;background-position:-1px -1px;padding:22px 18px 60px}
+.sheet{max-width:74ch;margin:0 auto;background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:28px 36px 34px;box-shadow:0 1px 0 var(--line),0 10px 28px -18px rgba(10,20,40,.35);font:17px/1.72 var(--serif);overflow-wrap:anywhere}
+.sheet>:first-child{margin-top:0}
+.sheet h1,.sheet h2,.sheet h3,.sheet h4{font-family:var(--sans);line-height:1.25;margin:1.5em 0 .5em}
+.sheet h1{font-size:1.7em}.sheet h2{font-size:1.35em;padding-bottom:.2em;border-bottom:1px solid var(--line)}.sheet h3{font-size:1.12em}.sheet h4,.sheet h5,.sheet h6{font-size:1em;color:var(--muted)}
+.sheet p{margin:.7em 0}
+.sheet a{color:var(--accent)}
+.sheet a.wl{text-decoration:none;border-bottom:1px dotted var(--accent)}
+.sheet a.wl.missing{color:var(--danger);border-bottom:1px dashed var(--danger)}
+.sheet a.tag{text-decoration:none;font:13.5px var(--sans);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 7px;border-radius:999px}
+.sheet code{font:.84em var(--mono);background:color-mix(in srgb,var(--muted) 18%,transparent);padding:1px 5px;border-radius:4px}
+.sheet pre{background:var(--side);color:var(--side-ink);padding:14px 16px;border-radius:6px;overflow:auto;line-height:1.5}
+.sheet pre code{background:none;padding:0;color:inherit;font-size:13.5px}
+.sheet blockquote{margin:.9em 0;padding:.1em 1em;border-left:3px solid var(--accent);color:var(--muted)}
+.sheet hr{border:0;border-top:1px solid var(--line);margin:1.6em 0}
+.sheet ul,.sheet ol{padding-left:1.4em;margin:.7em 0}
+.sheet li.task{list-style:none;margin-left:-1.2em}
+.sheet li.task input{margin-right:.45em;accent-color:var(--accent)}
+.tw{overflow:auto;margin:.9em 0}
+.sheet table{border-collapse:collapse;font:14.5px var(--sans)}
+.sheet th,.sheet td{border:1px solid var(--line);padding:5px 10px;text-align:left}
+.sheet th{background:color-mix(in srgb,var(--muted) 12%,transparent)}
+.sheet .blank{color:var(--muted);font-style:italic}
+
+/* info panel */
+#info{background:var(--paper);border-left:1px solid var(--line);overflow:auto;min-height:0}
+#info section{padding:14px 16px 4px}
+#info h3{margin:0 0 6px;font:650 13px var(--sans);color:var(--muted)}
+#info ul{list-style:none;margin:0 0 8px;padding:0}
+#info .row{display:block;width:100%;text-align:left;border:0;background:transparent;padding:4px 6px;border-radius:4px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#info .row:hover{background:color-mix(in srgb,var(--muted) 14%,transparent)}
+#info .row.missing{color:var(--danger)}
+#info .none{color:var(--muted);font-size:13.5px;padding:2px 6px 8px}
+.ent{margin:0 0 8px}
+.ent h4{margin:6px 0 3px;font:600 12.5px var(--sans);color:var(--muted)}
+.ent .v{display:block;width:100%;text-align:left;font:12.5px var(--mono);border:1px solid var(--line);background:transparent;border-radius:4px;padding:3px 7px;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ent .v:hover{border-color:var(--accent)}
+.opt{display:flex;gap:7px;align-items:center;font-size:13px;color:var(--muted);padding:2px 6px 6px}
+.opt input{accent-color:var(--accent)}
+
+/* dialogs */
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);padding:0;max-width:min(92vw,880px);width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+dialog::backdrop{background:rgba(8,12,18,.55)}
+.dlg-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.dlg-head h2{margin:0;font:650 16px var(--sans)}
+.dlg-head button{border:0;background:transparent;font-size:20px;line-height:1;padding:2px 8px;color:var(--muted)}
+.dlg-body{padding:14px 16px 18px}
+#gcanvas{display:block;width:100%;height:68vh;background-color:var(--bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:26px 26px;touch-action:none}
+.gnote{font-size:13px;color:var(--muted);padding:8px 16px 12px}
+#dlgPal{max-width:min(92vw,560px);margin-top:12vh}
+#palIn{width:100%;border:0;border-bottom:1px solid var(--line);padding:14px 16px;font-size:17px;background:transparent;outline:none}
+#palList{list-style:none;margin:0;padding:6px;max-height:50vh;overflow:auto}
+#palList li{padding:8px 11px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:12px}
+#palList li small{color:var(--muted)}
+#palList li[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+#palList li[aria-selected="true"] small{color:inherit;opacity:.8}
+.data-grid{display:grid;gap:10px}
+.data-grid .ghost{background:transparent;border:1px solid var(--line);border-radius:6px;padding:10px 12px;text-align:left}
+.data-grid .ghost:hover{border-color:var(--accent)}
+.data-grid small{display:block;color:var(--muted);margin-top:2px}
+.data-grid .danger{color:var(--danger)}
+.hint{color:var(--muted);font-size:13.5px;margin:12px 0 0}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--side);color:var(--side-ink);padding:8px 14px;border-radius:8px;font-size:13.5px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+
+@media (max-width:900px){
+  #app,#app.no-info{grid-template-columns:minmax(0,1fr)}
+  #sidebar{position:fixed;inset:0 auto 0 0;width:min(88vw,330px);transform:translateX(-102%);transition:transform .18s ease;z-index:30}
+  #app.show-side #sidebar{transform:none}
+  #info{display:none!important}
+  .only-mobile{display:inline-block}
+  #work.mode-split{grid-template-columns:1fr}
+  #work.mode-split #previewWrap{display:none}
+  .sheet{padding:20px 18px 26px;font-size:16.5px}
+  #btnInfo{display:none}
+}
+@media (prefers-reduced-motion:reduce){#sidebar{transition:none}}
+</style>
+</head>
+<body>
+<noscript>Для работы нужен JavaScript.</noscript>
+<div id="app">
+  <aside id="sidebar" aria-label="Заметки">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><g stroke="#88a2ff" stroke-width="1.6" fill="none"><path d="M5 17 12 6l7 11M5 17h14"/></g><circle cx="5" cy="17" r="2.6" fill="#88a2ff"/><circle cx="12" cy="6" r="2.6" fill="#d6dee7"/><circle cx="19" cy="17" r="2.6" fill="#88a2ff"/></svg>
+      <span>OSINT Vault</span>
+    </div>
+    <div class="actions">
+      <button id="btnNew" class="primary" title="Новая заметка (Alt+N)">Новая заметка</button>
+      <button id="btnGraph" class="ghost" title="Граф связей между заметками">Граф</button>
+      <button id="btnData" class="ghost" title="Экспорт и импорт">Данные</button>
+      <button id="btnTheme" class="ghost" title="Светлая или тёмная тема" aria-label="Сменить тему">Тема</button>
+    </div>
+    <input id="search" type="search" placeholder="Поиск по заметкам" aria-label="Поиск по заметкам" autocomplete="off">
+    <div id="tags" class="tags" aria-label="Теги"></div>
+    <div id="list" class="list"></div>
+    <div class="side-foot"><div id="status">Загрузка…</div><div id="backup"></div></div>
+  </aside>
+
+  <main id="main">
+    <header class="toolbar">
+      <button id="btnMenu" class="ghost only-mobile" aria-label="Список заметок">Заметки</button>
+      <input id="title" aria-label="Название заметки" autocomplete="off" spellcheck="false">
+      <select id="tpl" aria-label="Создать заметку из шаблона"></select>
+      <div class="seg" role="group" aria-label="Режим просмотра">
+        <button data-mode="edit" aria-pressed="false">Правка</button>
+        <button data-mode="split" aria-pressed="true">Рядом</button>
+        <button data-mode="read" aria-pressed="false">Чтение</button>
+      </div>
+      <button id="btnInfo" class="ghost" aria-pressed="true">Панель</button>
+      <button id="btnDel" class="ghost danger">Удалить</button>
+    </header>
+    <div id="work" class="mode-split">
+      <div id="editorWrap">
+        <textarea id="ed" spellcheck="false" aria-label="Текст заметки" placeholder="Пиши здесь. [[Название]] — ссылка на заметку, #тег — тег."></textarea>
+        <ul id="suggest" role="listbox" hidden></ul>
+      </div>
+      <div id="previewWrap"><article id="preview" class="sheet"></article></div>
+    </div>
+  </main>
+
+  <aside id="info" aria-label="Связи и найденные сущности"><div id="infoBody"></div></aside>
+</div>
+
+<dialog id="dlgGraph" aria-label="Граф связей">
+  <div class="dlg-head"><h2>Граф связей</h2><button data-close aria-label="Закрыть">×</button></div>
+  <canvas id="gcanvas"></canvas>
+  <div class="gnote">Кружок — заметка, пунктирный — ссылка на заметку, которой ещё нет. Узлы можно перетаскивать, клик открывает заметку.</div>
+</dialog>
+
+<dialog id="dlgPal" aria-label="Быстрый переход">
+  <input id="palIn" placeholder="Найти заметку или создать новую" autocomplete="off" aria-label="Быстрый переход">
+  <ul id="palList" role="listbox"></ul>
+</dialog>
+
+<dialog id="dlgData" aria-label="Экспорт и импорт">
+  <div class="dlg-head"><h2>Данные</h2><button data-close aria-label="Закрыть">×</button></div>
+  <div class="dlg-body">
+    <div class="data-grid">
+      <button class="ghost" id="exJson">Скачать резервную копию (.json)<small>Все заметки одним файлом. Можно загрузить обратно через «Импорт».</small></button>
+      <button class="ghost" id="exZip">Скачать как папку заметок (.zip из .md файлов)<small>Распакуй и открой папку как хранилище в Obsidian или любом редакторе Markdown.</small></button>
+      <button class="ghost" id="exMd">Скачать текущую заметку (.md)</button>
+      <button class="ghost" id="imp">Импорт (.json, .md, .txt)<small>Можно выбрать сразу несколько файлов. Совпадающие названия получат номер.</small></button>
+      <button class="ghost danger" id="wipe">Удалить все данные из этого браузера</button>
+    </div>
+    <input id="impFile" type="file" accept=".json,.md,.markdown,.txt" multiple hidden>
+    <p class="hint">Заметки хранятся только в этом браузере (localStorage). Если очистить данные сайта или сменить браузер, они пропадут — делай резервную копию.</p>
+  </div>
+</dialog>
+
+<div id="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- helpers ---------- */
+const KEY = 'osint-vault-v1', PREF = 'osint-vault-prefs';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const unesc = s => s.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g;
+const cleanTitle = s => String(s).replace(/[\[\]|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+let notes = [], currentId = null, query = '', tagFilter = null;
+let prefs = { mode: 'split', info: true, theme: 'light', lastExport: 0, defang: false };
+let saveTimer = null, stale = false;
+
+/* ---------- templates ---------- */
+const today = () => new Date().toISOString().slice(0, 10);
+const TEMPLATES = {
+  person: { name: 'Человек', title: 'Новый человек', body: () => `#человек
+
+## Идентификаторы
+- Имя:
+- Ники:
+- Почта:
+- Телефон:
+
+## Профили
+- 
+
+## Связи
+- 
+
+## Источники
+- ` },
+  domain: { name: 'Домен или сервер', title: 'Новый домен', body: () => `#домен
+
+## Основное
+- Домен:
+- IP:
+- Регистратор и дата регистрации:
+- Хостинг и ASN:
+
+## DNS и сертификаты
+- 
+
+## Поддомены
+- 
+
+## Связанные сущности
+- 
+
+## Источники
+- ` },
+  account: { name: 'Ник или аккаунт', title: 'Новый аккаунт', body: () => `#аккаунт
+
+- Ник:
+- Платформы:
+- Дата создания:
+- Аватар и описание профиля:
+
+## Находки
+- 
+
+## Связи
+- 
+
+## Источники
+- ` },
+  case: { name: 'Расследование', title: 'Новое расследование', body: () => `#расследование
+
+## Вопрос
+Что именно мы выясняем?
+
+## Что известно
+- 
+
+## Гипотезы
+- [ ] 
+
+## Что проверить
+- [ ] 
+
+## Выводы
+Уверенность: низкая, средняя или высокая — и почему.
+
+## Источники
+- ` },
+  source: { name: 'Источник', title: 'Новый источник', body: () => `#источник
+
+- Ссылка:
+- Дата доступа: ${today()}
+- Архивная копия:
+- Автор или издание:
+- Надёжность источника (A–F):
+- Достоверность информации (1–6):
+
+## Что подтверждает
+- 
+
+## Заметки
+- ` }
+};
+
+/* ---------- parsing ---------- */
+const stripCode = b => b.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`\n]*`/g, ' ');
+function parseLinks(body) {
+  const out = [], seen = new Set();
+  const re = /\[\[([^\[\]\n|]+)(?:\|[^\[\]\n]+)?\]\]/g; let m;
+  const t = stripCode(body);
+  while ((m = re.exec(t))) { const k = cleanTitle(m[1]); if (k && !seen.has(k.toLowerCase())) { seen.add(k.toLowerCase()); out.push(k); } }
+  return out;
+}
+function parseTags(body) {
+  const out = new Set(), re = /(^|[\s(])#([\p{L}\p{N}_\-\/]+)/gu; let m;
+  const t = stripCode(body);
+  while ((m = re.exec(t))) if (/\p{L}/u.test(m[2])) out.add(m[2].toLowerCase());
+  return [...out];
+}
+function headings(body) {
+  const out = []; let fence = false;
+  body.replace(/\r/g, '').split('\n').forEach(l => {
+    if (/^```/.test(l)) { fence = !fence; return; }
+    if (fence) return;
+    const m = l.match(/^(#{1,6})\s+(.*)$/);
+    if (m) out.push({ lvl: m[1].length, text: m[2].trim() });
+  });
+  return out;
+}
+function extract(body) {
+  const uniq = a => [...new Set(a)];
+  const emails = uniq(body.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g) || []);
+  const ips = uniq(body.match(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g) || []);
+  const urls = uniq((body.match(/https?:\/\/[^\s<>"'\])]+/g) || []).map(u => u.replace(/[.,;:!?]+$/, '')));
+  const doms = new Set();
+  urls.forEach(u => { try { const h = new URL(u).hostname.toLowerCase(); if (!/^\d+\.\d+\.\d+\.\d+$/.test(h)) doms.add(h); } catch (e) {} });
+  emails.forEach(e => doms.add(e.split('@')[1].toLowerCase()));
+  const hashes = uniq(body.match(/\b(?:[a-fA-F0-9]{64}|[a-fA-F0-9]{40}|[a-fA-F0-9]{32})\b/g) || []);
+  return { 'Почта': emails, 'IP-адреса': ips, 'Домены': [...doms], 'Ссылки': urls, 'Хеши': hashes };
+}
+const defang = v => v.replace(/^http/i, m => m === 'http' ? 'hxxp' : 'HXXP').replace(/\./g, '[.]').replace(/@/g, '[@]');
+
+/* ---------- markdown ---------- */
+function inline(raw) {
+  let s = esc(raw); const stash = [];
+  const keep = h => { stash.push(h); return '\u0001' + (stash.length - 1) + '\u0001'; };
+  s = s.replace(/`([^`\n]+)`/g, (m, c) => keep('<code>' + c + '</code>'));
+  s = s.replace(/\[\[([^\[\]\n|]+)(?:\|([^\[\]\n]+))?\]\]/g, (m, t, a) => {
+    const title = cleanTitle(t); const ok = !!findByTitle(unesc(title));
+    return keep(`<a href="#" class="wl${ok ? '' : ' missing'}" data-title="${title}">${a || title}</a>`);
+  });
+  s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g, (m, t, u) =>
+    keep(`<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`));
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g, (m, p, u) =>
+    p + keep(`<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`));
+  s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?![*\w])/g, '$1<em>$2</em>');
+  s = s.replace(/~~([^~\n]+?)~~/g, '<del>$1</del>');
+  s = s.replace(/(^|[\s(])#([\p{L}\p{N}_\-\/]+)/gu, (m, p, t) =>
+    /\p{L}/u.test(t) ? p + keep(`<a href="#" class="tag" data-tag="${t.toLowerCase()}">#${t}</a>`) : m);
+  for (let i = 0; i < 4 && /\u0001\d+\u0001/.test(s); i++) s = s.replace(/\u0001(\d+)\u0001/g, (m, k) => stash[+k]);
+  return s;
+}
+function renderMd(src, top = true) {
+  src = src.replace(/\r/g, '').replace(CTRL, '');
+  const L = src.split('\n'), h = []; let i = 0, hc = 0;
+  const isSep = s => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(s);
+  while (i < L.length) {
+    const line = L[i]; let m;
+    if (/^```/.test(line)) {
+      const buf = []; i++;
+      while (i < L.length && !/^```/.test(L[i])) buf.push(L[i++]);
+      i++; h.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`); continue;
+    }
+    if (/^\s*$/.test(line)) { i++; continue; }
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+      const lv = m[1].length; h.push(`<h${lv}${top ? ` data-h="${hc++}"` : ''}>${inline(m[2])}</h${lv}>`); i++; continue;
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { h.push('<hr>'); i++; continue; }
+    if (/^>\s?/.test(line)) {
+      const buf = []; while (i < L.length && /^>\s?/.test(L[i])) buf.push(L[i++].replace(/^>\s?/, ''));
+      h.push(`<blockquote>${renderMd(buf.join('\n'), false)}</blockquote>`); continue;
+    }
+    if (line.includes('|') && i + 1 < L.length && isSep(L[i + 1])) {
+      const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      const head = cells(line); i += 2; const rows = [];
+      while (i < L.length && L[i].includes('|') && !/^\s*$/.test(L[i])) rows.push(cells(L[i++]));
+      h.push('<div class="tw"><table><thead><tr>' + head.map(c => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>' +
+        rows.map(r => '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>');
+      continue;
+    }
+    if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {
+      const ordered = /^\s*\d/.test(line), items = [];
+      while (i < L.length) {
+        const mm = L[i].match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/); if (!mm) break;
+        items.push({ lvl: Math.min(4, Math.floor(mm[1].replace(/\t/g, '  ').length / 2)), text: mm[3], line: i }); i++;
+      }
+      const tg = ordered ? 'ol' : 'ul';
+      h.push(`<${tg}>` + items.map(it => {
+        let t = it.text, cb = ''; const c = t.match(/^\[( |x|X)\]\s+(.*)$/);
+        if (c) { cb = `<input type="checkbox" ${c[1] === ' ' ? '' : 'checked'} ${top ? `data-line="${it.line}"` : 'disabled'}>`; t = c[2]; }
+        return `<li class="${cb ? 'task' : ''}" style="margin-left:${it.lvl * 1.4}em">${cb}${inline(t)}</li>`;
+      }).join('') + `</${tg}>`);
+      continue;
+    }
+    const buf = [L[i++]];
+    while (i < L.length && !/^\s*$/.test(L[i]) && !/^(#{1,6}\s|```|>|\s*([-*+]|\d+[.)])\s+)/.test(L[i])) buf.push(L[i++]);
+    h.push(`<p>${inline(buf.join('\n')).replace(/\n/g, '<br>')}</p>`);
+  }
+  return h.join('\n');
+}
+
+/* ---------- data ---------- */
+const cur = () => notes.find(n => n.id === currentId) || null;
+const findByTitle = t => { t = cleanTitle(t).toLowerCase(); return notes.find(n => n.title.toLowerCase() === t); };
+function uniqueTitle(base, ignoreId) {
+  base = cleanTitle(base || '') || 'Без названия'; let t = base, i = 2;
+  while (notes.some(n => n.id !== ignoreId && n.title.toLowerCase() === t.toLowerCase())) t = base + ' ' + (i++);
+  return t;
+}
+function makeNote(title, body) {
+  const t = Date.now();
+  const n = { id: uid(), title: uniqueTitle(title), body: body || '', created: t, updated: t };
+  notes.push(n); return n;
+}
+function renameNote(n, newTitle) {
+  const old = n.title; const nt = uniqueTitle(newTitle, n.id);
+  if (nt === old) return nt;
+  const re = new RegExp('\\[\\[\\s*' + reEsc(old) + '\\s*(\\|[^\\]]*)?\\]\\]', 'gi');
+  notes.forEach(m => { if (re.test(m.body)) { m.body = m.body.replace(re, (x, a) => `[[${nt}${a || ''}]]`); m.updated = Date.now(); } re.lastIndex = 0; });
+  n.title = nt; n.updated = Date.now(); return nt;
+}
+function seed() {
+  const a = makeNote('Добро пожаловать', `# Добро пожаловать в OSINT Vault
+
+Это локальная записная книжка для расследований. Всё хранится в этом браузере, никуда не отправляется.
+
+## Как пользоваться
+- **Ссылки между заметками:** набери \`[[\` и выбери заметку, например [[Пример: домен example.com]].
+- **Теги:** пиши #тег прямо в тексте, по ним можно фильтровать список слева.
+- **Шаблоны:** выпадающий список в верхней панели создаёт заметку для человека, домена, аккаунта, источника или расследования.
+- **Сущности:** справа программа сама находит в тексте почты, IP, домены, ссылки и хеши. Клик по значению копирует его.
+- **Граф:** кнопка «Граф» показывает, как заметки связаны.
+- **Горячие клавиши:** Ctrl+K — быстрый переход, Alt+N — новая заметка, Ctrl+S — сохранить сейчас.
+
+## Правила хорошей заметки
+- [ ] У каждого факта есть источник и дата доступа.
+- [ ] Для важных страниц сделана архивная копия.
+- [ ] Гипотезы записаны отдельно от подтверждённых фактов.
+
+#справка`);
+  makeNote('Пример: домен example.com', `#домен #пример
+
+## Основное
+- Домен: example.com
+- Контакт: admin@example.com
+- Сервер: 93.184.216.34
+- Страница: https://example.com/
+
+Вернуться к [[Добро пожаловать]].
+
+## Источники
+- Дата доступа: ${today()}`);
+  currentId = a.id;
+}
+
+function setStatus(t, warn) { const s = $('#status'); s.textContent = t; s.classList.toggle('warn', !!warn); }
+const hhmm = () => new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+function scheduleSave() { if (stale) return; setStatus('Сохраняю…'); clearTimeout(saveTimer); saveTimer = setTimeout(save, 350); }
+function save() {
+  clearTimeout(saveTimer); saveTimer = null;
+  if (stale) return;
+  try { localStorage.setItem(KEY, JSON.stringify({ v: 1, notes, currentId })); setStatus('Сохранено в ' + hhmm()); }
+  catch (e) { setStatus('Не удалось сохранить. Сделай резервную копию.', true); }
+}
+function savePrefs() { try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch (e) {} }
+function load() {
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREF) || '{}')); } catch (e) {}
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) { setStatus('Хранилище браузера недоступно. Делай резервные копии.', true); }
+  if (raw) {
+    try {
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.notes)) {
+        notes = d.notes.filter(n => n && typeof n.id === 'string' && typeof n.title === 'string' && typeof n.body === 'string')
+          .map(n => ({ id: n.id, title: n.title, body: n.body, created: +n.created || Date.now(), updated: +n.updated || Date.now() }));
+        currentId = d.currentId;
+      }
+    } catch (e) {
+      try { localStorage.setItem(KEY + '-broken-' + Date.now(), raw); } catch (e2) {}
+      setStatus('Данные повреждены, копия сохранена отдельно.', true);
+    }
+  }
+  if (!notes.length) seed();
+  if (!cur()) currentId = [...notes].sort((a, b) => b.updated - a.updated)[0].id;
+}
+
+/* ---------- rendering ---------- */
+const ed = $('#ed'), titleIn = $('#title');
+const fmt = ts => {
+  const d = new Date(ts), n = new Date();
+  return d.toDateString() === n.toDateString()
+    ? d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' });
+};
+function snippet(b) { return b.replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 90) || 'Пусто'; }
+function matches(n) {
+  if (tagFilter && !parseTags(n.body).includes(tagFilter)) return false;
+  if (!query) return true;
+  const hay = (n.title + '\n' + n.body).toLowerCase();
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}
+function renderList() {
+  const box = $('#list');
+  const arr = notes.filter(matches).sort((a, b) => b.updated - a.updated);
+  if (!arr.length) { box.innerHTML = `<div class="empty">${notes.length ? 'Ничего не найдено. Измени запрос или сбрось тег.' : 'Заметок пока нет.'}</div>`; return; }
+  box.innerHTML = arr.map(n => `<button class="item" data-id="${n.id}" aria-current="${n.id === currentId}"><b>${esc(n.title)}</b><small>${esc(snippet(n.body))}</small><i>${fmt(n.updated)}</i></button>`).join('');
+}
+function renderTags() {
+  const c = new Map(); notes.forEach(n => parseTags(n.body).forEach(t => c.set(t, (c.get(t) || 0) + 1)));
+  if (tagFilter && !c.has(tagFilter)) tagFilter = null;
+  const arr = [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  $('#tags').innerHTML = arr.map(([t, k]) => `<button class="chip" data-tag="${esc(t)}" aria-pressed="${t === tagFilter}">#${esc(t)} ${k}</button>`).join('');
+}
+function renderPreview() {
+  const n = cur(); const p = $('#preview');
+  p.innerHTML = n && n.body.trim() ? renderMd(n.body) : '<p class="blank">Заметка пустая. Начни писать слева.</p>';
+}
+function renderInfo() {
+  const n = cur(), box = $('#infoBody'); if (!n) { box.innerHTML = ''; return; }
+  const key = n.title.toLowerCase();
+  const back = notes.filter(m => m.id !== n.id && parseLinks(m.body).some(t => t.toLowerCase() === key));
+  const out = parseLinks(n.body);
+  const ent = extract(n.body), outline = headings(n.body);
+  const list = (arr, fn, none) => arr.length ? '<ul>' + arr.map(fn).join('') + '</ul>' : `<div class="none">${none}</div>`;
+  let entHtml = '', total = 0;
+  for (const [label, vals] of Object.entries(ent)) {
+    if (!vals.length) continue; total += vals.length;
+    entHtml += `<div class="ent"><h4>${label} (${vals.length})</h4>` + vals.slice(0, 30).map(v => `<button class="v" data-copy="${esc(v)}" title="Копировать: ${esc(v)}">${esc(v)}</button>`).join('') + '</div>';
+  }
+  box.innerHTML = `
+    <section><h3>Обратные ссылки (${back.length})</h3>${list(back, m => `<li><button class="row" data-open="${m.id}">${esc(m.title)}</button></li>`, 'Никто не ссылается на эту заметку.')}</section>
+    <section><h3>Исходящие ссылки (${out.length})</h3>${list(out, t => { const f = findByTitle(t); return `<li><button class="row${f ? '' : ' missing'}" data-link="${esc(t)}" title="${f ? 'Открыть' : 'Создать заметку'}">${esc(t)}${f ? '' : ' (нет заметки)'}</button></li>`; }, 'В тексте нет ссылок вида [[Название]].')}</section>
+    <section><h3>Найдено в тексте (${total})</h3>${total ? entHtml : '<div class="none">Почты, IP, домены, ссылки и хеши появятся здесь сами.</div>'}
+      <label class="opt"><input type="checkbox" id="defang" ${prefs.defang ? 'checked' : ''}> Копировать в безопасном виде (hxxp, [.])</label></section>
+    <section><h3>Структура</h3>${list(outline, (o, k) => `<li><button class="row" data-goto="${k}" style="padding-left:${6 + (o.lvl - 1) * 12}px">${esc(o.text)}</button></li>`, 'Заголовков пока нет.')}</section>`;
+}
+function renderBackup() {
+  const el = $('#backup');
+  if (!prefs.lastExport) { el.textContent = 'Резервной копии ещё не было'; el.classList.add('warn'); return; }
+  const d = Math.floor((Date.now() - prefs.lastExport) / 864e5);
+  el.textContent = 'Резервная копия: ' + (d === 0 ? 'сегодня' : d + ' дн. назад');
+  el.classList.toggle('warn', d >= 7);
+}
+function refreshSide() { renderList(); renderTags(); renderInfo(); }
+function refreshAll() { refreshSide(); renderPreview(); }
+function loadEditor() { const n = cur(); if (!n) return; titleIn.value = n.title; ed.value = n.body; refreshAll(); }
+function openNote(id, focusEd) {
+  if (!notes.some(n => n.id === id)) return;
+  currentId = id; loadEditor(); scheduleSave(); $('#app').classList.remove('show-side');
+  if (focusEd) ed.focus();
+}
+function createNote(title, body, focusTitle) {
+  const n = makeNote(title, body); openNote(n.id);
+  if (focusTitle) { titleIn.focus(); titleIn.select(); } else ed.focus();
+  return n;
+}
+function setMode(m) {
+  prefs.mode = m; $('#work').className = 'mode-' + m;
+  $$('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); savePrefs();
+}
+function setInfo(on) {
+  prefs.info = on; $('#app').classList.toggle('no-info', !on); $('#btnInfo').setAttribute('aria-pressed', on); savePrefs();
+}
+function setTheme(t) { prefs.theme = t; document.documentElement.dataset.theme = t; savePrefs(); }
+let toastT;
+function toast(t) { const e = $('#toast'); e.textContent = t; e.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => e.hidden = true, 1800); }
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); }
+  catch (e) { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); } catch (x) {} a.remove(); }
+  toast('Скопировано: ' + (t.length > 40 ? t.slice(0, 40) + '…' : t));
+}
+
+/* ---------- editor events ---------- */
+let rt;
+ed.addEventListener('input', () => {
+  const n = cur(); if (!n) return;
+  n.body = ed.value; n.updated = Date.now(); scheduleSave();
+  requestAnimationFrame(renderPreview);
+  clearTimeout(rt); rt = setTimeout(refreshSide, 300);
+  updateSuggest();
+});
+titleIn.addEventListener('change', () => {
+  const n = cur(); if (!n) return;
+  if (!cleanTitle(titleIn.value)) { titleIn.value = n.title; return; }
+  titleIn.value = renameNote(n, titleIn.value); ed.value = n.body; scheduleSave(); refreshAll();
+});
+titleIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); titleIn.blur(); ed.focus(); } });
+
+let sug = { open: false, items: [], idx: 0, start: 0 };
+function hideSuggest() { sug.open = false; $('#suggest').hidden = true; }
+function renderSuggest() {
+  const u = $('#suggest'); u.hidden = false;
+  u.innerHTML = sug.items.map((n, i) => `<li role="option" data-i="${i}" aria-selected="${i === sug.idx}">${esc(n.title)}</li>`).join('');
+}
+function updateSuggest() {
+  const pos = ed.selectionStart; if (ed.selectionEnd !== pos) return hideSuggest();
+  const m = ed.value.slice(0, pos).match(/\[\[([^\[\]\n|]*)$/); if (!m) return hideSuggest();
+  const q = m[1].toLowerCase();
+  const items = notes.filter(n => n.id !== currentId && n.title.toLowerCase().includes(q)).sort((a, b) => b.updated - a.updated).slice(0, 8);
+  if (!items.length) return hideSuggest();
+  sug = { open: true, items, idx: 0, start: pos - m[1].length }; renderSuggest();
+}
+function acceptSuggest(i) {
+  const it = sug.items[i]; if (!it) return;
+  const pos = ed.selectionStart; const end = ed.value.slice(pos, pos + 2) === ']]' ? pos + 2 : pos;
+  ed.setRangeText(it.title + ']]', sug.start, end, 'end'); hideSuggest();
+  ed.dispatchEvent(new Event('input')); ed.focus();
+}
+$('#suggest').addEventListener('mousedown', e => { const li = e.target.closest('li'); if (li) { e.preventDefault(); acceptSuggest(+li.dataset.i); } });
+ed.addEventListener('blur', () => setTimeout(hideSuggest, 120));
+ed.addEventListener('click', updateSuggest);
+ed.addEventListener('keydown', e => {
+  if (e.key !== 'Tab' && e.key !== 'Escape' && e.key !== 'Shift') delete ed.dataset.free;
+  if (sug.open) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sug.idx = (sug.idx + (e.key === 'ArrowDown' ? 1 : sug.items.length - 1)) % sug.items.length; renderSuggest(); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptSuggest(sug.idx); return; }
+    if (e.key === 'Escape') { e.preventDefault(); hideSuggest(); return; }
+  }
+  if (e.key === 'Escape') { ed.dataset.free = '1'; return; }
+  if (e.key === 'Tab' && !e.shiftKey && !ed.dataset.free) {
+    e.preventDefault(); ed.setRangeText('  ', ed.selectionStart, ed.selectionEnd, 'end'); ed.dispatchEvent(new Event('input')); return;
+  }
+  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const pos = ed.selectionStart; if (ed.selectionEnd !== pos || pos === 0) return;
+    const ls = ed.value.lastIndexOf('\n', pos - 1) + 1, line = ed.value.slice(ls, pos);
+    const le = ed.value.indexOf('\n', pos), rest = ed.value.slice(pos, le === -1 ? undefined : le);
+    const m = line.match(/^(\s*)([-*+]|\d+\.)\s(\[[ xX]\]\s)?(.*)$/);
+    if (m && rest === '') {
+      e.preventDefault();
+      if (m[4] === '') ed.setRangeText('', ls, pos, 'end');
+      else { let mark = m[2]; if (/\d/.test(mark)) mark = (parseInt(mark, 10) + 1) + '.'; ed.setRangeText('\n' + m[1] + mark + ' ' + (m[3] ? '[ ] ' : ''), pos, pos, 'end'); }
+      ed.dispatchEvent(new Event('input'));
+    }
+  }
+});
+
+/* ---------- clicks ---------- */
+$('#preview').addEventListener('click', e => {
+  const wl = e.target.closest('a.wl');
+  if (wl) { e.preventDefault(); const t = wl.dataset.title; const f = findByTitle(t); if (f) openNote(f.id); else createNote(t, '', false); return; }
+  const tg = e.target.closest('a.tag');
+  if (tg) { e.preventDefault(); tagFilter = tg.dataset.tag; refreshSide(); $('#app').classList.add('show-side'); }
+});
+$('#preview').addEventListener('change', e => {
+  const cb = e.target.closest('input[type=checkbox][data-line]'); const n = cur(); if (!cb || !n) return;
+  const L = n.body.replace(/\r/g, '').split('\n'), k = +cb.dataset.line;
+  if (L[k] != null) { L[k] = L[k].replace(/\[( |x|X)\]/, cb.checked ? '[x]' : '[ ]'); n.body = L.join('\n'); n.updated = Date.now(); ed.value = n.body; scheduleSave(); refreshSide(); }
+});
+$('#list').addEventListener('click', e => { const b = e.target.closest('.item'); if (b) openNote(b.dataset.id); });
+$('#tags').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  tagFilter = tagFilter === b.dataset.tag ? null : b.dataset.tag; renderTags(); renderList();
+});
+$('#infoBody').addEventListener('click', e => {
+  const o = e.target.closest('[data-open]'); if (o) return openNote(o.dataset.open);
+  const l = e.target.closest('[data-link]');
+  if (l) { const f = findByTitle(l.dataset.link); return f ? openNote(f.id) : createNote(l.dataset.link, '', false); }
+  const c = e.target.closest('[data-copy]'); if (c) return copyText(prefs.defang ? defang(c.dataset.copy) : c.dataset.copy);
+  const g = e.target.closest('[data-goto]');
+  if (g) { const el = $(`#preview [data-h="${g.dataset.goto}"]`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+});
+$('#infoBody').addEventListener('change', e => { if (e.target.id === 'defang') { prefs.defang = e.target.checked; savePrefs(); } });
+$('#search').addEventListener('input', e => { query = e.target.value.trim(); renderList(); });
+
+$('#btnNew').addEventListener('click', () => createNote('Новая заметка', '', true));
+$('#btnTheme').addEventListener('click', () => setTheme(prefs.theme === 'dark' ? 'light' : 'dark'));
+$('#btnInfo').addEventListener('click', () => setInfo(!prefs.info));
+$('#btnMenu').addEventListener('click', () => $('#app').classList.toggle('show-side'));
+$$('.seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+$('#main').addEventListener('click', () => $('#app').classList.remove('show-side'));
+$('#btnDel').addEventListener('click', () => {
+  const n = cur(); if (!n) return;
+  if (!confirm(`Удалить заметку «${n.title}»? Это нельзя отменить.`)) return;
+  notes = notes.filter(x => x.id !== n.id);
+  if (!notes.length) seed();
+  currentId = [...notes].sort((a, b) => b.updated - a.updated)[0].id;
+  loadEditor(); scheduleSave();
+});
+const tpl = $('#tpl');
+tpl.innerHTML = '<option value="">Из шаблона…</option>' + Object.entries(TEMPLATES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join('');
+tpl.addEventListener('change', () => {
+  const t = TEMPLATES[tpl.value]; tpl.value = ''; if (!t) return;
+  createNote(t.title, t.body(), true);
+});
+
+/* ---------- dialogs ---------- */
+$$('dialog').forEach(d => {
+  d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
+});
+
+/* palette */
+let palItems = [], palIdx = 0;
+function renderPal() {
+  const q = $('#palIn').value.trim(), ql = q.toLowerCase();
+  let res;
+  if (!ql) res = [...notes].sort((a, b) => b.updated - a.updated).slice(0, 12);
+  else { const t = [], b = []; notes.forEach(n => n.title.toLowerCase().includes(ql) ? t.push(n) : n.body.toLowerCase().includes(ql) && b.push(n)); res = [...t, ...b].slice(0, 12); }
+  palItems = res.map(n => ({ note: n }));
+  if (q && !findByTitle(q)) palItems.push({ create: cleanTitle(q) });
+  palIdx = Math.min(palIdx, Math.max(0, palItems.length - 1));
+  $('#palList').innerHTML = palItems.map((it, i) => it.note
+    ? `<li role="option" data-i="${i}" aria-selected="${i === palIdx}"><span>${esc(it.note.title)}</span><small>${fmt(it.note.updated)}</small></li>`
+    : `<li role="option" data-i="${i}" aria-selected="${i === palIdx}"><span>Создать «${esc(it.create)}»</span><small>Enter</small></li>`).join('');
+}
+function pickPal(i) {
+  const it = palItems[i]; if (!it) return; $('#dlgPal').close();
+  if (it.note) openNote(it.note.id, true); else createNote(it.create, '', false);
+}
+function openPalette() { $('#palIn').value = ''; palIdx = 0; renderPal(); $('#dlgPal').showModal(); $('#palIn').focus(); }
+$('#palIn').addEventListener('input', () => { palIdx = 0; renderPal(); });
+$('#palIn').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (palItems.length) { palIdx = (palIdx + (e.key === 'ArrowDown' ? 1 : palItems.length - 1)) % palItems.length; renderPal(); $('#palList [aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); } }
+  else if (e.key === 'Enter') { e.preventDefault(); pickPal(palIdx); }
+});
+$('#palList').addEventListener('click', e => { const li = e.target.closest('li'); if (li) pickPal(+li.dataset.i); });
+
+/* export / import */
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const stamp = () => new Date().toISOString().slice(0, 10);
+const fileSafe = s => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim().slice(0, 120) || 'note';
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) { c ^= b[i]; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xEDB88320 & -(c & 1)); } return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  const dt = new Date(), dosTime = (dt.getHours() << 11) | (dt.getMinutes() << 5) | (dt.getSeconds() >> 1);
+  const dosDate = ((dt.getFullYear() - 1980) << 9) | ((dt.getMonth() + 1) << 5) | dt.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, size, true); lh.setUint32(22, size, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(10, 0, true); ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, size, true); ch.setUint32(24, size, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + size;
+  }
+  const csize = central.reduce((a, p) => a + p.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, csize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+function markExported() { prefs.lastExport = Date.now(); savePrefs(); renderBackup(); }
+$('#exJson').addEventListener('click', () => {
+  download(new Blob([JSON.stringify({ app: 'osint-vault', v: 1, exported: new Date().toISOString(), notes }, null, 2)], { type: 'application/json' }), `osint-vault-${stamp()}.json`);
+  markExported(); toast('Резервная копия скачана');
+});
+$('#exZip').addEventListener('click', () => {
+  const enc = new TextEncoder(), used = new Set(), files = [];
+  notes.forEach(n => {
+    let base = fileSafe(n.title), name = base + '.md', i = 2;
+    while (used.has(name.toLowerCase())) name = `${base} (${i++}).md`;
+    used.add(name.toLowerCase()); files.push({ name, data: enc.encode(n.body) });
+  });
+  download(makeZip(files), `osint-vault-${stamp()}.zip`); markExported(); toast('Архив скачан');
+});
+$('#exMd').addEventListener('click', () => {
+  const n = cur(); if (!n) return;
+  download(new Blob([n.body], { type: 'text/markdown' }), fileSafe(n.title) + '.md');
+});
+$('#imp').addEventListener('click', () => $('#impFile').click());
+$('#impFile').addEventListener('change', async e => {
+  let added = 0, replaced = 0;
+  for (const f of [...e.target.files]) {
+    try {
+      const text = await f.text();
+      if (/\.json$/i.test(f.name)) {
+        const d = JSON.parse(text), arr = Array.isArray(d) ? d : d.notes;
+        if (!Array.isArray(arr)) continue;
+        for (const x of arr) {
+          if (!x || typeof x.title !== 'string' || typeof x.body !== 'string') continue;
+          const ex = typeof x.id === 'string' && notes.find(n => n.id === x.id);
+          if (ex) { if ((+x.updated || 0) > ex.updated) { ex.title = uniqueTitle(x.title, ex.id); ex.body = x.body; ex.updated = +x.updated; replaced++; } }
+          else { const n = makeNote(x.title, x.body); n.created = +x.created || n.created; n.updated = +x.updated || n.updated; if (typeof x.id === 'string' && !notes.some(m => m.id === x.id)) n.id = x.id; added++; }
+        }
+      } else { makeNote(f.name.replace(/\.[^.]+$/, ''), text); added++; }
+    } catch (err) { toast('Не удалось прочитать файл ' + f.name); }
+  }
+  e.target.value = ''; $('#dlgData').close();
+  if (!cur()) currentId = notes[0]?.id; loadEditor(); scheduleSave();
+  toast(`Импорт: добавлено ${added}, обновлено ${replaced}`);
+});
+$('#wipe').addEventListener('click', () => {
+  if (!confirm('Удалить ВСЕ заметки из этого браузера? Сначала сделай резервную копию.')) return;
+  if (!confirm('Точно удалить всё? Это нельзя отменить.')) return;
+  notes = []; seed(); loadEditor(); save(); $('#dlgData').close();
+});
+$('#btnData').addEventListener('click', () => $('#dlgData').showModal());
+
+/* graph */
+let stopGraph = () => {};
+$('#btnGraph').addEventListener('click', () => { $('#dlgGraph').showModal(); requestAnimationFrame(startGraph); });
+$('#dlgGraph').addEventListener('close', () => stopGraph());
+function startGraph() {
+  stopGraph();
+  const cv = $('#gcanvas'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim();
+  const idx = new Map(), nodes = [], edges = [];
+  const add = (label, note) => {
+    const k = label.toLowerCase();
+    if (!idx.has(k)) { idx.set(k, nodes.length); nodes.push({ label, note, x: W / 2 + (Math.random() - .5) * W * .6, y: H / 2 + (Math.random() - .5) * H * .6, vx: 0, vy: 0, deg: 0 }); }
+    return idx.get(k);
+  };
+  notes.forEach(n => add(n.title, n));
+  notes.forEach(n => {
+    const a = idx.get(n.title.toLowerCase());
+    parseLinks(n.body).forEach(t => { const b = add(t, findByTitle(t) || null); if (a !== b) { edges.push([a, b]); nodes[a].deg++; nodes[b].deg++; } });
+  });
+  let alpha = 1, drag = -1, hover = -1, moved = 0, raf = 0, running = false;
+  const R = n => 5 + Math.min(n.deg, 8);
+  function tick() {
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + .01;
+        if (d2 > 90000) continue; const d = Math.sqrt(d2), f = 2600 / d2 * alpha; dx /= d; dy /= d;
+        a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
+      }
+    }
+    for (const [i, j] of edges) {
+      const a = nodes[i], b = nodes[j]; let dx = b.x - a.x, dy = b.y - a.y; const d = Math.sqrt(dx * dx + dy * dy) || 1, f = (d - 95) * .02;
+      dx /= d; dy /= d; a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
+    }
+    nodes.forEach((n, i) => {
+      n.vx += (W / 2 - n.x) * .004; n.vy += (H / 2 - n.y) * .004;
+      if (i === drag) { n.vx = n.vy = 0; return; }
+      n.vx *= .82; n.vy *= .82; n.x = Math.max(24, Math.min(W - 24, n.x + n.vx)); n.y = Math.max(24, Math.min(H - 24, n.y + n.vy));
+    });
+    alpha = Math.max(0, alpha * .985);
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const nb = new Set(); if (hover >= 0) edges.forEach(([a, b]) => { if (a === hover) nb.add(b); if (b === hover) nb.add(a); });
+    ctx.lineWidth = 1;
+    edges.forEach(([a, b]) => {
+      const hot = hover >= 0 && (a === hover || b === hover);
+      ctx.strokeStyle = hot ? col('--accent') : col('--muted'); ctx.globalAlpha = hot ? .95 : .4;
+      ctx.beginPath(); ctx.moveTo(nodes[a].x, nodes[a].y); ctx.lineTo(nodes[b].x, nodes[b].y); ctx.stroke();
+    });
+    ctx.globalAlpha = 1; ctx.font = '12.5px ' + col('--sans');
+    nodes.forEach((n, i) => {
+      const isCur = n.note && n.note.id === currentId, r = R(n);
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 7);
+      if (n.note) { ctx.fillStyle = isCur ? col('--accent') : col('--ink'); ctx.fill(); }
+      else { ctx.setLineDash([3, 3]); ctx.strokeStyle = col('--danger'); ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); }
+      if (i === hover) { ctx.lineWidth = 2; ctx.strokeStyle = col('--accent'); ctx.beginPath(); ctx.arc(n.x, n.y, r + 3, 0, 7); ctx.stroke(); }
+      if (nodes.length <= 45 || i === hover || nb.has(i) || isCur) {
+        const t = n.label.length > 28 ? n.label.slice(0, 27) + '…' : n.label;
+        ctx.lineWidth = 3.5; ctx.strokeStyle = col('--paper'); ctx.strokeText(t, n.x + r + 4, n.y + 4);
+        ctx.fillStyle = col('--ink'); ctx.fillText(t, n.x + r + 4, n.y + 4);
+      }
+    });
+  }
+  function loop() { if (alpha > .01 || drag >= 0) tick(); draw(); if (alpha > .01 || drag >= 0) raf = requestAnimationFrame(loop); else running = false; }
+  function kick(a) { alpha = Math.max(alpha, a); if (!running) { running = true; raf = requestAnimationFrame(loop); } }
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const pick = (x, y) => { let best = -1, bd = 1e9; nodes.forEach((n, i) => { const d = Math.hypot(n.x - x, n.y - y); if (d <= R(n) + 6 && d < bd) { bd = d; best = i; } }); return best; };
+  const onDown = e => { const [x, y] = pos(e); drag = pick(x, y); moved = 0; if (drag >= 0) { cv.setPointerCapture(e.pointerId); kick(.3); } };
+  const onMove = e => {
+    const [x, y] = pos(e);
+    if (drag >= 0) { const n = nodes[drag]; moved += Math.hypot(x - n.x, y - n.y); n.x = x; n.y = y; kick(.3); }
+    else { const h = pick(x, y); if (h !== hover) { hover = h; cv.style.cursor = h >= 0 ? 'pointer' : 'default'; draw(); } }
+  };
+  const onUp = () => {
+    if (drag < 0) return; const n = nodes[drag]; const clicked = moved < 5; drag = -1;
+    if (clicked) { $('#dlgGraph').close(); if (n.note) openNote(n.note.id); else createNote(n.label, '', false); }
+  };
+  cv.addEventListener('pointerdown', onDown); cv.addEventListener('pointermove', onMove); cv.addEventListener('pointerup', onUp);
+  stopGraph = () => { cancelAnimationFrame(raf); running = false; cv.removeEventListener('pointerdown', onDown); cv.removeEventListener('pointermove', onMove); cv.removeEventListener('pointerup', onUp); };
+  kick(1);
+}
+
+/* ---------- global keys & lifecycle ---------- */
+document.addEventListener('keydown', e => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
+  else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); save(); toast('Сохранено'); }
+  else if (e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); createNote('Новая заметка', '', true); }
+});
+window.addEventListener('beforeunload', () => { if (saveTimer) save(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) save(); });
+window.addEventListener('storage', e => {
+  if (e.key === KEY) { stale = true; clearTimeout(saveTimer); setStatus('Данные изменены в другой вкладке. Обнови страницу.', true); }
+});
+
+load();
+setTheme(prefs.theme === 'dark' ? 'dark' : 'light');
+setMode(['edit', 'split', 'read'].includes(prefs.mode) ? prefs.mode : 'split');
+setInfo(prefs.info !== false);
+loadEditor(); renderBackup();
+if (!$('#status').classList.contains('warn')) setStatus('Готово');
+})();
+</script>
+</body>
+</html>
